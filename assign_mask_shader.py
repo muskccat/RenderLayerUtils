@@ -25,9 +25,9 @@ def assign_shd_gui(*args):
     cmds.columnLayout(adjustableColumn = True)
 
     cmds.rowColumnLayout(numberOfRows=3)
-    cmds.button( label = "RED",width = 350,height=120,command =  lambda x:assign_shd( cmds.ls(sl=1) ,0) )
-    cmds.button( label = "GREEN",width = 350,height=120,command =  lambda x:assign_shd( cmds.ls(sl=1),1) )
-    cmds.button( label = "BLUE",width = 350,height=120,command =  lambda x:assign_shd( cmds.ls(sl=1) ,2) )
+    cmds.button( label = "RED",width = 350,height=120,bgc=(0.6,0.2,0.2),command =  lambda x:assign_shd( cmds.ls(sl=1) ,0) )
+    cmds.button( label = "GREEN",width = 350,height=120,bgc=(0.2,0.6,0.2),command =  lambda x:assign_shd( cmds.ls(sl=1),1) )
+    cmds.button( label = "BLUE",width = 350,height=120,bgc=(0.2,0.2,0.6),command =  lambda x:assign_shd( cmds.ls(sl=1) ,2) )
     cmds.window('assign_gui',e=1, width=350,height=360)
     cmds.showWindow('assign_gui')
     
