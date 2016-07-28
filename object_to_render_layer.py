@@ -13,7 +13,7 @@ import types
 def put_obj(*args):    
     rl = cmds.textScrollList('rls', q=True,si=True)
     if type(rl) !=types.NoneType:
-        sels = cmds.textScrollList('sels',q=True,si=True)
+        sels = cmds.textScrollList('sels',q=True,ai=True)
         if type(sels) !=types.NoneType:
             for y in rl:
                 for x in sels:
