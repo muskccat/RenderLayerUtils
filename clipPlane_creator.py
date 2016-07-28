@@ -10,6 +10,19 @@ import maya.mel as mel
 
 # create clip plane (Poly Plane)
 
+
+def obj_del(obj):
+    if cmds.objExists(obj) :
+        cmds.delete(obj)
+        
+def lock_attr(obj, trs, l, k, c):
+    
+    cmds.setAttr(obj +"."+ trs+"x", lock=l, k=k, channelBox = c)
+    cmds.setAttr(obj +"."+ trs+"y", lock=l, k=k, channelBox = c)
+    cmds.setAttr(obj +"."+ trs+"z", lock=l, k=k, channelBox = c)
+        
+        
+
 def make_plane(name):
     plane = cmds.polyPlane(n=name,w=1,h=1,sx=1,sy=1)
     pShape = cmds.listRelatives(plane,s=True)
@@ -30,21 +43,13 @@ def make_plane(name):
     cmds.setAttr(plane+".overrideEnabled",1)
     cmds.setAttr(plane+".overrideShading",0)
     cmds.setAttr(plane+".overrideColor",17)
-    cmds.setAttr(plane+".rx", 90)
-    cmds.setAttr(plane + ".tx", lock=True, k=False, channelBox = False)
-    cmds.setAttr(plane + ".ty", lock=True, k=False, channelBox = False)
-    cmds.setAttr(plane + ".tz", lock=True, k=False, channelBox = False)
-    cmds.setAttr(plane + ".rx", lock=True, k=False, channelBox = False)
-    cmds.setAttr(plane + ".ry", lock=True, k=False, channelBox = False)
-    cmds.setAttr(plane + ".rz", lock=True, k=False, channelBox = False)
-    cmds.setAttr(plane + ".sx", lock=True, k=False, channelBox = False)
-    cmds.setAttr(plane + ".sy", lock=True, k=False, channelBox = False)
-    cmds.setAttr(plane + ".sz", lock=True, k=False, channelBox = False)
-    
-    
+
     planes = (plane, pShape)
 
     return planes
+
+    
+
     
 def g_plane(*args):
     
@@ -54,12 +59,8 @@ def g_plane(*args):
         x = cmds.Group()
         n1 = cmds.ls(sl=True)
         cmds.rename(n1,args[i])
-
-        
+   
     return args
-    
-
-    
             
     
 def c_plane(*ars):
@@ -75,39 +76,30 @@ def c_plane(*ars):
     
     if name==None : print "Please select a camera."
     else :
-        if not(cmds.objExists(name[0] + "_clipPlane")):
-            cp = make_plane(name[0]+"_clipPlane")
-            g = g_plane(name[0] + "_nearClipping", name[0]+"_farClipping")
-            t = make_tex("NEAR CLIP PLANE", "FAR CLIP PLANE")
+        np = name[0]+"_nearClipPlane"
+        fp = name[0]+"_farCipPlane"
+        obj_del(np)
+        obj_del(fp)
             
-            for i,x in enumerate(g) :
-                cmds.parent(x,name[0])
-                cmds.setAttr(x+".translate",0,0,0)
-                cmds.setAttr(x+".rotate",0,0,0)
-                cmds.setAttr(x+".scale",1,1,1)
-
-                cmds.parent(t[i], x)
-                tex = t[i]
-                cmds.setAttr(tex[0]+".translate",0,0,0)
-                cmds.setAttr(tex[0]+".rotate",0,0,0)
-                cmds.setAttr(tex[0]+".scale",.1,.1,.1)
-                cmds.setAttr(tex[0] + ".tx", lock=True, k=False, channelBox = False)
-                cmds.setAttr(tex[0] + ".ty", lock=True, k=False, channelBox = False)
-                cmds.setAttr(tex[0] + ".tz", lock=True, k=False, channelBox = False)
-                cmds.setAttr(tex[0] + ".rx", lock=True, k=False, channelBox = False)
-                cmds.setAttr(tex[0] + ".ry", lock=True, k=False, channelBox = False)
-                cmds.setAttr(tex[0] + ".rz", lock=True, k=False, channelBox = False)
-                cmds.setAttr(tex[0] + ".sx", k=False, channelBox = False)
-                cmds.setAttr(tex[0] + ".sy", k=False, channelBox = False)
-                cmds.setAttr(tex[0] + ".sz", k=False, channelBox = False)
-                
-                cmds.select(cp[0],r=True)
-                cmds.select(x,add=True)
-                cmds.parent(add=True)
-                
-                
-            
-
+        g = (make_plane(np), make_plane(fp))
+        dist = (cmds.floatField('vNear',q=True,v=True) ,cmds.floatField('vFar',q=True,v=True))
+        #cmds.setAttr(cp[1]+".overrideEnabled", 1)
+        #cmds.setAttr(cp[1]+".overrideDisplayType", 1)
+        
+        for i,x in enumerate(g) :
+            x = x[0]
+            cmds.parent(x,name[0])
+            cmds.setAttr(x+".translate",0,0,0)
+            cmds.setAttr(x+".rotate",-90,0,0)
+            cmds.setAttr(x+".scale",1,1,1)
+      
+            lock_attr(x,"t",True,False,False)
+            lock_attr(x,"r",True,False,False)
+            #lock_attr(x,"s",True,False,False)
+            cmds.setAttr(x+".tz", lock=False,k= True, channelBox = True)
+            cmds.setAttr(x+".tz",-dist[i])
+        cmds.select(name[0],r=True)
+    
 
 def clip_plane_creator(*args):
     gui = 'clipPlaneCreator'
@@ -125,12 +117,19 @@ def clip_plane_creator(*args):
     cm_list = filter(lambda x:not(cmds.getAttr(x+".orthographic")), cms)    # if orthographic is true, doesn't append "cm_list var"
     cm_list = cmt(cm_list)
     
-    
-    cmds.text("Camera List", h = 30)
-    cmds.textScrollList('cam_sel',append = cm_list,ams=False)
+   
+    cmds.button('cam_list', l = "Camera List", h = 30,bgc=(0.4,0.4,1), c=clip_plane_creator )
+    cmds.textScrollList('cam_sel',append = cm_list,ams=False , h = 180)
     cmds.separator()
+    cmds.rowColumnLayout(numberOfColumns = 4)
+    cmds.text("Near Dist:",w = 60)
+    cmds.floatField('vNear', v = 10,width = 60)
+    cmds.text("Far Dist:", w= 60)
+    cmds.floatField('vFar',  v = 100, w= 60)
+    cmds.setParent("..")
+    
     cmds.button('bCreatePlane', label = "Create Clip Plane", width = 200, c = c_plane)
-    cmds.window(gui, e=1, width=360, height = 120)
+    cmds.window(gui, e=1, width=240, height = 120)
     cmds.showWindow(gui)
     
 clip_plane_creator()
