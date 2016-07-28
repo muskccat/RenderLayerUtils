@@ -12,6 +12,7 @@ import types
 cmds.setAttr("defaultResolution.width", 1920)
 cmds.setAttr("defaultResolution.height", 1080)
 
+
 def r_init(*args):
     open_file = 'file -import -type \"mayaBinary\" -ra true -mergeNamespacesOnClash false -namespace \"MI_LAYER_initialize\" -options \"v=0;\"  -pr \"Q:/MI/00_Guide/RenderPreset/MI_LAYER_initialize.mb\";\n'
     mel.eval(open_file)
@@ -22,6 +23,9 @@ def r_init(*args):
         mel.eval('editRenderLayerGlobals -currentRenderLayer defaultRenderLayer;')
         del_layer = 'delete ' + x +';\n'
         mel.eval(del_layer)
+        
+    vl = cmds.ls(typ="VRayRenderElement")
+    if len(vl) != 0:  cmds.delete(vl)
 
 # SHADER Creator
 def make_shd(name, rgb, t):
@@ -61,34 +65,9 @@ def make_shd(name, rgb, t):
         cmds.setAttr(oc+".spread", 0.7)
 
     
-    # zDepth Shader 
-    def set_depth(n):        
-    
-        cmds.addAttr(n,ln="close", at="double", min=0)
-        cmds.addAttr(n,ln="far", at="double", min=0)
-        cmds.setAttr(n+".far", 1000,e=True,keyable=True)
-        cmds.setAttr(n+".close",10, e=True,keyable=True)
+      
         
-        zr = cmds.shadingNode("ramp",n="zDepth_ramp", asTexture=True)
-        zps = cmds.shadingNode("samplerInfo",n="zDepth_samplerInfo",asUtility=True)
-        zdb = cmds.shadingNode("distanceBetween",n="zDepth_distanceBetween",asUtility=True)
-        zsr = cmds.shadingNode("setRange",n="zDepth_setRange",asUtility=True)
-        
-        cmds.removeMultiInstance(zr+'.colorEntryList[1]', b=True)
-        cmds.setAttr(zr+'.colorEntryList[2].color',0,0,0, type='double3')
-        cmds.setAttr(zr+'.colorEntryList[2].position',1)
-        cmds.setAttr(zr+'.colorEntryList[0].color',1,1,1, type='double3')
-        cmds.setAttr(zr+'.interpolation', 3,)
-        
-        cmds.connectAttr(zsr+".outValueX", zr+".vCoord")
-        cmds.connectAttr(zdb+".distance", zsr+".valueX")
-        cmds.connectAttr(zps+".pointCamera",zdb+".point1")
-        cmds.connectAttr(n+".far", zsr+".oldMaxX")
-        cmds.connectAttr(n+".close", zsr+".oldMinX")
-        cmds.connectAttr(zr+".outColor",n+".outColor")
-        
-        
-  # MakeShader
+    # MakeShader
     if not(cmds.objExists(s_name)): #Check that M_***_mat exists       
         cmds.shadingNode(s_type[t-1],n=s_name,asShader=True ) #Black_mat Shader Create
         cmds.sets(n=sg_name, renderable=True, noSurfaceShader=True, empty=True) #Set Shading Group
@@ -97,7 +76,7 @@ def make_shd(name, rgb, t):
         if t == 1: set_color(s_name,rgb)
         if t == 2: set_shadow(s_name)         
         if t == 3: set_ao(s_name)
-        if t == 4: set_depth(s_name)
+
 
 # Shaders create loop function
 def shd_creation():
@@ -106,13 +85,43 @@ def shd_creation():
                 'GREEN':((0,1,0),1),
                 'RED':((1,0,0),1),
                 'Shadow':((0,0,0),2),
-                'AO':((0,0,0),3),
-                'zDepth':((0,0,0),4)}   # Shader Key List
+                'AO':((0,0,0),3)
+                }   # Shader Key List
     
     name = shd_list.keys()
     for n in name:
         x = shd_list[n]
         make_shd(n,x[0],x[1])
+        
+
+#Connect Selected camera to zDepth render layer
+def connect_zDepth(*args):
+    r_cam = cmds.textScrollList('r_cam', q=True, si=True)
+    if not(type(r_cam) == types.NoneType):
+        
+        for rc in r_cam:
+            x = cmds.listRelatives(rc, shapes=True)
+            wh = "vrayRE_Z_depth.vray_depthWhite"
+            bl = "vrayRE_Z_depth.vray_depthBlack"
+            bMin = cmds.connectionInfo(wh ,id=True)
+            bMax = cmds.connectionInfo(wh ,id=True)
+            cMin = cmds.connectionInfo(bl ,sfd=True)
+            cMax = cmds.connectionInfo(bl ,sfd=True)
+            
+            
+            if bMin :
+                cmds.disconnectAttr(cMin, wh)
+                cmds.connectAttr( x[0]+".nearClipPlane", wh )
+            else :
+                cmds.connectAttr( x[0]+".nearClipPlane", wh )
+                
+            if bMax : 
+                cmds.disconnectAttr(cMax, bl)
+                cmds.connectAttr( x[0]+".farClipPlane" , bl )
+            else :
+                cmds.connectAttr( x[0]+".farClipPlane" , bl )
+            
+
         
 #create light
 def create_light(*args):
@@ -143,7 +152,6 @@ def create_light(*args):
 def make_layer(name,sf,ef, r_type):
     rl_name = name
     sels = cmds.ls(sl=True)
-
     r_cam = cmds.textScrollList('r_cam', q=True, si=True)
     cs = lambda x:cmds.listRelatives(x,shapes=True)
     
@@ -163,11 +171,9 @@ def make_layer(name,sf,ef, r_type):
         cmds.setAttr(drg + ".startFrame", sf)
         cmds.setAttr(drg + ".endFrame", ef)
 
-        put_obj(sels, rl_name)
-        
     else: l = rl_name
-    
-    
+
+    put_obj(sels,rl_name)
     # Collect Camera data
     a_cam = cm_list()
     a_cam = a_cam[0]
@@ -177,17 +183,22 @@ def make_layer(name,sf,ef, r_type):
         cmds.setAttr(ac+".renderable", 0)
    
     # Turn on "renderble" : selected camera.
+    cam = []
     if not(type(r_cam) == types.NoneType):
         for rc in r_cam:
             x = cs(rc)
             cmds.setAttr(x[0]+".renderable", 1)
-    return l
+            cam.append(x)
+            
+    return (l,cam)
     
 # selected object -> render layer
 def put_obj(obj,rl):
     if type(obj) == types.ListType:
         for x in obj:
-            cmds.editRenderLayerMembers(rl,x,noRecurse=True)
+            p = cmds.listRelatives(x, shapes=True)
+            if (cmds.objectType(x) =="transform" or cmds.objectType(x) == "mesh" or cmds.objectType(x) == "nurbsSurface"):
+                cmds.editRenderLayerMembers(rl,x,noRecurse=True)
     else :
         cmds.editRenderLayerMembers(rl,obj,noRecurse=True)
         
@@ -203,6 +214,7 @@ def maya_set(*args):
 
 def v_ray_set(*args):
     # NRM V-ray Setting
+    
     cmds.setAttr("vraySettings.samplerType",1)
     cmds.setAttr("vraySettings.minShadeRate",2)
     cmds.setAttr("vraySettings.aaFilterOn",1)
@@ -210,7 +222,7 @@ def v_ray_set(*args):
     cmds.setAttr("vraySettings.dmcMinSubdivs",1)
     cmds.setAttr("vraySettings.dmcMaxSubdivs",4)
     cmds.setAttr("vraySettings.giOn",0)
-    mel.eval("vrayAddRenderElement normalsChannel;")
+    
 
 def mr_set(*args):
     # OC Mentalray Setting
@@ -231,7 +243,7 @@ def mr_set(*args):
 # Get Render Layer Name
 def get_name(t):
     
-    name =  "EP_" + cmds.textFieldGrp('ep_field',q=True,text=True) +  "_SC" + cmds.textFieldGrp('sc_field',q=True,text=True) +  "_C"  + cmds.textFieldGrp('cn_field',q=True,text=True) +"_"   + cmds.textFieldGrp('ex_field',q=True,text=True) 
+    name =  "EP" + cmds.textFieldGrp('ep_field',q=True,text=True) +  "_S" + cmds.textFieldGrp('sc_field',q=True,text=True) +  "_C"  + cmds.textFieldGrp('cn_field',q=True,text=True) +"_"   + cmds.textFieldGrp('ex_field',q=True,text=True) 
     cb = cmds.checkBox('c_box', q=True,  v=True)
     cus = cmds.textFieldGrp('cus', q=True, text=True)
  
@@ -243,138 +255,173 @@ def get_name(t):
 # button commands
 def bRgb_mask(*args):
     t = "MASK"
+    sels = cmds.ls(sl=True)
     name = get_name(t)    
     sf = int(cmds.textFieldGrp('start_frame', q=True, tx=True))
     ef = int(cmds.textFieldGrp('end_frame', q=True, tx=True))
     print len(args)
-    if args[0] == "char" :
+    if args[0] == "ch" :
         type_l = ("face", "hair", "all")
         for x in type_l:
             name = get_name(args[0]+"_"+x+"_"+t)
-            make_layer(name,sf,ef,t)
-    else: make_layer(name, sf, ef, t)
-    
-    rl = make_layer(name, sf, ef, t)
-    cmds.editRenderLayerGlobals(crl= rl)
-    cmds.setAttr("defaultRenderGlobals.ren", "mayaSoftware", typ='string')
+            if not(cmds.objExists(name)) :
+                rl = make_layer(name,sf,ef,t)
+    elif type(args[0]) == types.StringType:
+        name = get_name(args[0]+"_"+t)
+        if not(cmds.objExists(name)) :
+            rl = make_layer(name, sf, ef, t)
+    else : 
+        name = get_name(t)
+        if not(cmds.objExists(name)) :
+            rl = make_layer(name, sf, ef, t)    
+    if not(cmds.objExists(name)) :
+        cmds.editRenderLayerGlobals(crl= rl[0])
+        cmds.setAttr("defaultRenderGlobals.ren", "mayaSoftware", typ='string')
 
-    maya_set()
+        maya_set()
+        if len(sels) != 0 : cmds.select(sels,r=True)
     return name
     
                  
 def bNormal(*args):
     t = "NRM"
+    sels = cmds.ls(sl=True)
     if type(args[0]) == types.StringType:
         name = get_name(args[0]+"_"+t)  
     else : name = get_name(t)
-    sf = int(cmds.textFieldGrp('start_frame', q=True, tx=True))
-    ef = int(cmds.textFieldGrp('end_frame', q=True, tx=True))
-    make_layer(name, sf, ef, t)    
-    
-    rl = make_layer(name, sf, ef, t)
-    cmds.editRenderLayerGlobals(crl= rl)
-    cmds.setAttr("defaultRenderGlobals.ren", "vray", typ='string')
-    v_ray_set()
-    
+    if not(cmds.objExists(name)) :
+        sf = int(cmds.textFieldGrp('start_frame', q=True, tx=True))
+        ef = int(cmds.textFieldGrp('end_frame', q=True, tx=True))
+        make_layer(name, sf, ef, t)    
+        
+        rl = make_layer(name, sf, ef, t)
+        cmds.editRenderLayerGlobals(crl= rl[0])
+        cmds.setAttr("defaultRenderGlobals.ren", "vray", typ='string')
+        v_ray_set()
+        mel.eval("vrayAddRenderElement normalsChannel;")
+        cmds.editRenderLayerAdjustment("vraySettings.fileNamePrefix")
+        cmds.setAttr("vraySettings.fileNamePrefix", rl[0],typ="string")
+        #cmds.editRenderLayerAdjustment("vraySettings.noAlpha")
+        cmds.editRenderLayerAdjustment("vraySettings.dontSaveRgbChannel")
+        #cmds.setAttr("vraySettings.noAlpha",1)
+        cmds.setAttr("vraySettings.dontSaveRgbChannel",1)
+        if len(sels) != 0 : cmds.select(sels,r=True)
     return name
     
     
 def bAO(*args):
     t = "AO"
+    sels = cmds.ls(sl=True)
     if type(args[0]) == types.StringType:
         name = get_name(args[0]+"_"+t)  
     else : name = get_name(t)
-    sf = int(cmds.textFieldGrp('start_frame', q=True, tx=True))
-    ef = int(cmds.textFieldGrp('end_frame', q=True, tx=True))
-    
-    rl = make_layer(name, sf, ef, t)
-    cmds.editRenderLayerGlobals(crl= rl)
-    cmds.setAttr("defaultRenderGlobals.ren", "mentalRay", typ='string')
-    mr_set()
-    
-    m_override = 'hookShaderOverride(\"' +rl + '\", \"\", \"M_AO_mat\")'
-    mel.eval(m_override)
-    
+    if not(cmds.objExists(name)) :
+        sf = int(cmds.textFieldGrp('start_frame', q=True, tx=True))
+        ef = int(cmds.textFieldGrp('end_frame', q=True, tx=True))
+        
+        rl = make_layer(name, sf, ef, t)
+        cmds.editRenderLayerGlobals(crl= rl[0])
+        cmds.setAttr("defaultRenderGlobals.ren", "mentalRay", typ='string')
+        mr_set()
+        
+        m_override = 'hookShaderOverride(\"' +rl[0] + '\", \"\", \"M_AO_mat\")'
+        mel.eval(m_override)
+        if len(sels) != 0 : cmds.select(sels,r=True)
     return name
 
 
 def bZDepth(*args):
     t = "ZD"
-    if type(args[0]) == types.StringType:
-        name = get_name(args[0]+"_"+t)  
-    else : name = get_name(t)    
-    sf = int(cmds.textFieldGrp('start_frame', q=True, tx=True))
-    ef = int(cmds.textFieldGrp('end_frame', q=True, tx=True))
-    make_layer(name, sf, ef, t)    
-    
-    rl = make_layer(name, sf, ef, t)
-    cmds.editRenderLayerGlobals(crl= rl)
-    cmds.setAttr("defaultRenderGlobals.ren", "mayaSoftware", typ='string')
-
-    maya_set()
-    
-    m_override = 'hookShaderOverride(\"' +rl + '\", \"\", \"M_zDepth_mat\")'
-    mel.eval(m_override)
-
-    return name
-    
-def bDiffuse(*args):
-    t= "DF"
+    sels = cmds.ls(sl=True)
     if type(args[0]) == types.StringType:
         name = get_name(args[0]+"_"+t)  
     else : name = get_name(t)
-    sf = int(cmds.textFieldGrp('start_frame', q=True, tx=True))
-    ef = int(cmds.textFieldGrp('end_frame', q=True, tx=True))
-    make_layer(name, sf, ef, t)   
+    if not(cmds.objExists(name)) :
+        sf = int(cmds.textFieldGrp('start_frame', q=True, tx=True))
+        ef = int(cmds.textFieldGrp('end_frame', q=True, tx=True))
+        make_layer(name, sf, ef, t)    
+        
+        rl = make_layer(name, sf, ef, t)
+        cmds.editRenderLayerGlobals(crl= rl[0])
+        cmds.setAttr("defaultRenderGlobals.ren", "vray", typ='string')
+        v_ray_set()
+        cmds.editRenderLayerAdjustment("vraySettings.noAlpha")
+        cmds.editRenderLayerAdjustment("vraySettings.dontSaveRgbChannel")
+        cmds.setAttr("vraySettings.noAlpha",1)
+        cmds.setAttr("vraySettings.dontSaveRgbChannel",1)
+        cmds.editRenderLayerAdjustment("vraySettings.fileNamePrefix")
+        cmds.setAttr("vraySettings.fileNamePrefix", rl[0],typ="string")
+        mel.eval("vrayAddRenderElement zdepthChannel;")
+        connect_zDepth()
+        if len(sels) != 0 : cmds.select(sels,r=True)
     
-    rl = make_layer(name, sf, ef, t)
-    cmds.editRenderLayerGlobals(crl= rl)
-    cmds.setAttr("defaultRenderGlobals.ren", "mayaSoftware", typ='string')
+    
+    
+def bDiffuse(*args):
+    t= "DF"
+    sels = cmds.ls(sl=True)
+    if type(args[0]) == types.StringType:
+        name = get_name(args[0]+"_"+t)  
+    else : name = get_name(t)
+    if not(cmds.objExists(name)) :
+        sf = int(cmds.textFieldGrp('start_frame', q=True, tx=True))
+        ef = int(cmds.textFieldGrp('end_frame', q=True, tx=True))
+        make_layer(name, sf, ef, t)   
+        
+        rl = make_layer(name, sf, ef, t)
+        cmds.editRenderLayerGlobals(crl= rl[0])
+        cmds.setAttr("defaultRenderGlobals.ren", "mayaSoftware", typ='string')
 
-    maya_set()
-
+        maya_set()
+        if len(sels) != 0 : cmds.select(sels,r=True)
     return name
     
 def bShad(*args):
     t = "SHAD"
+    sels = cmds.ls(sl=True)
     if type(args[0]) == types.StringType:
         name = get_name(args[0]+"_"+t)  
     else : name = get_name(t)
-    sf = int(cmds.textFieldGrp('start_frame', q=True, tx=True))
-    ef = int(cmds.textFieldGrp('end_frame', q=True, tx=True))
-    make_layer(name, sf, ef, t)   
-    
-    rl = make_layer(name, sf, ef, t)
-    cmds.editRenderLayerGlobals(crl= rl)
-    cmds.setAttr("defaultRenderGlobals.ren", "mayaSoftware", typ='string')
+    if not(cmds.objExists(name)) :
+        sf = int(cmds.textFieldGrp('start_frame', q=True, tx=True))
+        ef = int(cmds.textFieldGrp('end_frame', q=True, tx=True))
+        make_layer(name, sf, ef, t)   
+            
+        rl = make_layer(name, sf, ef, t)
+        cmds.editRenderLayerGlobals(crl= rl[0])
+        cmds.setAttr("defaultRenderGlobals.ren", "mayaSoftware", typ='string')
 
-    maya_set()
-    
-    m_override = 'hookShaderOverride(\"' +rl + '\", \"\", \"M_Shadow_mat\")'
-    mel.eval(m_override)
-    
+        maya_set()
+        
+        m_override = 'hookShaderOverride(\"' +rl[0] + '\", \"\", \"M_Shadow_mat\")'
+        mel.eval(m_override)
+        if len(sels) != 0 : cmds.select(sels,r=True)
     return name
     
     
 def bChar(*args):
-    df = bDiffuse("char")
-    bNormal("char")
-    bRgb_mask("char")
-    bZDepth("char")
-    bAO("char")
-    shad = bShad("char")
+    df = bDiffuse("ch")
+    bNormal("ch")
+    bRgb_mask("ch")
+    
+    shad = bShad("ch")
     c_lt = create_light("ch_light","dir")
     s_lt = create_light("shad_light","dir")
     put_obj(c_lt, df)
     put_obj(s_lt, shad)
+     
+    
+    
     
 def bBg(*args):
     df = bDiffuse("bg")
     bNormal("bg")
+    bRgb_mask("bg")
     bZDepth("bg")
     bAO("bg")
     b_lt = create_light("bg_light","pt")
     put_obj(b_lt,df)
+
 
 # Get camera list // only perspective
 def cm_list():
@@ -385,7 +432,6 @@ def cm_list():
     cmt = cmt(cm_list)
     return (cm_list, cmt)
    
-
 
 # Main GUI
 def mrl_base_gui(*ars):
@@ -424,15 +470,15 @@ def mrl_base_gui(*ars):
     cmds.button('rgb_mask', label= "MASK", width=120,bgc=(.7,0.7,0.7), c=bRgb_mask)
     cmds.button('zDepth', label= "ZD", width=120,bgc=(.7,0.7,0.7), c=bZDepth)
     cmds.button('AO', label= "AO", width=120, bgc=(.7,0.7,0.7),c=bAO)
-    cmds.button('shad', label= "SHAD", width=120, bgc=(.7,0.7,0.7),c=bShad)   
+    cmds.button('shad', label= "SHAD", width=120, bgc=(.7,0.7,0.7),c=bShad)
     cmds.setParent("..")
     cmds.rowColumnLayout(numberOfRows=1)
     cmds.button('a_char', label= "CHAR", width=180, bgc=(.9,0.8,0.7),c=bChar)    
     cmds.button('a_bg', label= "BG", width=180, bgc=(.9,0.8,0.7),c=bBg)    
     cmds.setParent("..")
 
-
-    cmds.button( label ="Refresh",width=120,bgc=(0.3,.5,0.2), command=mrl_base_gui)
+    cmds.button('cZdepth', label = "CONNECT ZDEPTH", c=connect_zDepth)
+    cmds.button( label ="Refresh",width=120,h = 35,bgc=(0.3,.5,0.2), command=mrl_base_gui)
     
     cmds.window(gui, e=1, width=360, height = 120)
     cmds.showWindow(gui)
