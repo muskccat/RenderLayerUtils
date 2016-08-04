@@ -1,8 +1,8 @@
 # coding : euc-kr
 # MARO render-layer creation script
 #
-# 2016.07.21
-# ver 2.1
+# 2016.08.04
+# ver 2.2
 # by Musky
 
 import maya.cmds as cmds
@@ -47,7 +47,7 @@ def make_shd(name, rgb, t):
     # RGB Mask Shader
     def set_color(n,rgb):    #rgb must be a tuple.
         cmds.setAttr(n+".outColor",rgb[0],rgb[1],rgb[2],type="double3")
-        cmds.setAttr(n+".outMatteOpacity",0,0,0,type='double3')
+        cmds.setAttr(n+".outMatteOpacity",1,1,1,type='double3')
 
     # Shadow Shader (useBackground)
     def set_shadow(n):
@@ -92,6 +92,10 @@ def shd_creation():
     for n in name:
         x = shd_list[n]
         make_shd(n,x[0],x[1])
+
+    cmds.setAttr("M_BLACK_mat.outMatteOpacity",0,0,0,type='double3')
+        
+    
         
 
 #Connect Selected camera to zDepth render layer
@@ -104,8 +108,8 @@ def connect_zDepth(*args):
             wh = "vrayRE_Z_depth.vray_depthWhite"
             bl = "vrayRE_Z_depth.vray_depthBlack"
             bMin = cmds.connectionInfo(wh ,id=True)
-            bMax = cmds.connectionInfo(wh ,id=True)
-            cMin = cmds.connectionInfo(bl ,sfd=True)
+            bMax = cmds.connectionInfo(bl ,id=True)
+            cMin = cmds.connectionInfo(wh ,sfd=True)
             cMax = cmds.connectionInfo(bl ,sfd=True)
             
             
