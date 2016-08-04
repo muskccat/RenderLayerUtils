@@ -1,8 +1,8 @@
 # coding : euc-kr
 # MARO Render layer Rename
 # 
-# 2016.07.21
-# ver 1.0
+# 2016.08.04
+# ver 1.2
 # by musky
 
 import maya.cmds as cmds
@@ -16,10 +16,18 @@ def ch_name(*args):
     if type(name) != types.NoneType:
         cmds.rename(name[0],n_name)
         cmds.editRenderLayerGlobals(crl=n_name)
-        cmds.setAttr("defaultRenderGlobals.imageFilePrefix", i_name, typ="string")
+        
+        # get all renderLayer Node
         rl = cmds.ls(typ="renderLayer")
+        
+        # remove defaultRenderLayer at render layer list.
         rls = filter (lambda x:x !="defaultRenderLayer", rl)
         cmds.textScrollList('rl_list', e=True,ra=True,append =rls ,ams=False)
+        cmds.setAttr("defaultRenderGlobals.imageFilePrefix", i_name, typ="string")
+        
+        if (cmds.getAttr("defaultRenderGlobals.ren") == 'vray') : 
+            cmds.setAttr("vraySettings.fileNamePrefix", i_name, typ="string")
+
     
 def img_name(*args):
     name = cmds.textScrollList('rl_list',q=True,si=True)
